@@ -18,18 +18,6 @@
 
 #include <nlohmann/json.hpp>
 
-#define RDK_CHECK_SUCCESS(value, errmsg)                                         \
-    do                                                                           \
-    {                                                                            \
-        auto ret_code = value;                                                   \
-        if (ret_code != 0)                                                       \
-        {                                                                        \
-            std::cout << "[ERROR] " << __FILE__ << ":" << __LINE__ << std::endl; \
-            std::cout << errmsg << ", error code:" << ret_code << std::endl;     \
-            return ret_code;                                                     \
-        }                                                                        \
-    } while (0);
-
 class RacingObstacleDetection
 {
 public:
@@ -45,7 +33,10 @@ public:
     float font_size;
     float font_thickness;
     float line_size;
- 
+   
     void load_config();
-    
+    int load_bin_model();
+
+private:
+    int rdk_check_success(int value, const std::string &errmsg);
 };
