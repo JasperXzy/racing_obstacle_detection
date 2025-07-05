@@ -24,6 +24,11 @@
 class RacingObstacleDetection
 {
 public:
+    void load_config();
+    int load_bin_model();
+    void detect(const hbDNNTensorProperties &input_properties, int input_H, int input_W, const uint8_t *ynv12, hbDNNHandle_t dnn_handle, int output_count);
+
+private:
     std::string model_file;
     int class_num;
     std::string dnn_parser;
@@ -36,11 +41,6 @@ public:
     float font_size;
     float font_thickness;
     float line_size;
-   
-    void load_config();
-    int load_bin_model();
-
-private:
     int rdk_check_success(int value, const std::string &errmsg);
 };
 

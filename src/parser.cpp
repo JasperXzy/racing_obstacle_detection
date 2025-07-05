@@ -82,7 +82,7 @@ int RacingObstacleDetection::load_bin_model()
     std::cout << "\033[31m[INFO] Load D-Robotics Quantize model time = " << std::fixed << std::setprecision(2)
               << std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::system_clock::now() - begin_time).count() / 1000.0 << " ms\033[0m" << std::endl;
     
-    // 1 打印模型名称
+    // 1. 打印模型名称
     const char **model_name_list;
     int model_count = 0;
     rdk_check_success(
@@ -97,13 +97,13 @@ int RacingObstacleDetection::load_bin_model()
     const char *model_name = model_name_list[0];
     std::cout << "[INFO] Model Name: " << model_name << std::endl;
 
-    // 2 获得Packed模型的第一个模型的handle
+    // 2. 获得Packed模型的第一个模型的handle
     hbDNNHandle_t dnn_handle;
     rdk_check_success(
         hbDNNGetModelHandle(&dnn_handle, packed_dnn_handle, model_name),
         "hbDNNGetModelHandle failed");
 
-    // 3 模型输入检查
+    // 3. 模型输入检查
     int32_t input_count = 0;
     rdk_check_success(
         hbDNNGetInputCount(&input_count, dnn_handle),
@@ -114,14 +114,14 @@ int RacingObstacleDetection::load_bin_model()
         hbDNNGetInputTensorProperties(&input_properties, dnn_handle, 0),
         "hbDNNGetInputTensorProperties failed");
 
-    // 3.1 D-Robotics YOLOv8 *.bin 模型应该为单输入
+    // 3.1. D-Robotics YOLOv8 *.bin 模型应该为单输入
     if (input_count > 1)
     {
         std::cout << "[ERROR] Your Model have more than 1 input, please check!" << std::endl;
         return -1;
     }
 
-    // 3.2 D-Robotics YOLOv8 *.bin 模型输入Tensor类型应为nv12
+    // 3.2. D-Robotics YOLOv8 *.bin 模型输入Tensor类型应为nv12
     if (input_properties.tensorType == HB_DNN_IMG_TYPE_NV12)
     {
         std::cout << "[INFO] Input Tensor Type: HB_DNN_IMG_TYPE_NV12" << std::endl;
@@ -132,7 +132,7 @@ int RacingObstacleDetection::load_bin_model()
         return -1;
     }
 
-    // 3.3 D-Robotics YOLOv8 *.bin 模型输入Tensor数据排布应为NCHW
+    // 3.3. D-Robotics YOLOv8 *.bin 模型输入Tensor数据排布应为NCHW
     if (input_properties.tensorLayout == HB_DNN_LAYOUT_NCHW)
     {
         std::cout << "[INFO] Input Tensor Layout: HB_DNN_LAYOUT_NCHW" << std::endl;
@@ -143,7 +143,7 @@ int RacingObstacleDetection::load_bin_model()
         return -1;
     }
 
-    // 3.4 D-Robotics YOLOv8 *.bin 模型输入Tensor数据的valid shape应为(1,3,H,W)
+    // 3.4. D-Robotics YOLOv8 *.bin 模型输入Tensor数据的valid shape应为(1,3,H,W)
     int32_t input_H, input_W;
     if (input_properties.validShape.numDimensions == 4)
     {
@@ -160,13 +160,13 @@ int RacingObstacleDetection::load_bin_model()
         return -1;
     }
 
-    // 4 模型输出检查
+    // 4. 模型输出检查
     int32_t output_count = 0;
     rdk_check_success(
         hbDNNGetOutputCount(&output_count, dnn_handle),
         "hbDNNGetOutputCount failed");
 
-    // 4.1 D-Robotics YOLOv8 *.bin 模型应该有6个输出
+    // 4.1. D-Robotics YOLOv8 *.bin 模型应该有6个输出
     if (output_count == 6)
     {
         for (int i = 0; i < 6; i++)
@@ -194,7 +194,7 @@ int RacingObstacleDetection::load_bin_model()
         return -1;
     }
 
-    // 4.2 调整输出头顺序的映射
+    // 4.2. 调整输出头顺序的映射
     int order[6] = {0, 1, 2, 3, 4, 5};
     int32_t H_8 = input_H / 8;
     int32_t H_16 = input_H / 16;
@@ -229,7 +229,7 @@ int RacingObstacleDetection::load_bin_model()
         }
     }
 
-    // 4.3 打印并检查调整后的输出头顺序的映射
+    // 4.3. 打印并检查调整后的输出头顺序的映射
     if (order[0] + order[1] + order[2] + order[3] + order[4] + order[5] == 0 + 1 + 2 + 3 + 4 + 5)
     {
         std::cout << "[INFO] Outputs Order Check SUCCESS, continue." << std::endl;
@@ -251,4 +251,35 @@ int RacingObstacleDetection::load_bin_model()
     std::cout << "================================================" << std::endl << std::endl;
 
     return 0;
+}
+
+void RacingObstacleDetection::detect(const hbDNNTensorProperties &input_properties, int input_H, int input_W, const uint8_t *ynv12, hbDNNHandle_t dnn_handle, int output_count)
+{
+    // 1. 将准备好的输入数据放入hbDNNTensor
+    hbDNNTensor input;
+    input.properties = input_properties;
+    hbSysAllocCachedMem(&input.sysMem[0], int(3 * input_H * input_W / 2));
+
+    memcpy(input.sysMem[0].virAddr, ynv12, int(3 * input_H * input_W / 2));
+    hbSysFlushMem(&input.sysMem[0], HB_SYS_MEM_CACHE_CLEAN);
+
+    // 2. 准备模型输出数据的空间
+    hbDNNTensor *output = new hbDNNTensor[output_count];
+    for (int i = 0; i < 6; i++)
+    {
+        hbDNNTensorProperties &output_properties = output[i].properties;
+        hbDNNGetOutputTensorProperties(&output_properties, dnn_handle, i);
+        int out_aligned_size = output_properties.alignedByteSize;
+        hbSysMem &mem = output[i].sysMem[0];
+        hbSysAllocCachedMem(&mem, out_aligned_size);
+    }
+
+    // 3. 推理模型
+    hbDNNTaskHandle_t task_handle = nullptr;
+    hbDNNInferCtrlParam infer_ctrl_param;
+    HB_DNN_INITIALIZE_INFER_CTRL_PARAM(&infer_ctrl_param);
+    hbDNNInfer(&task_handle, &output, &input, dnn_handle, &infer_ctrl_param);
+
+    // 4. 等待任务结束
+    hbDNNWaitTaskDone(task_handle, 0);
 }
