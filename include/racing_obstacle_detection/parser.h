@@ -1,3 +1,6 @@
+#ifndef PARSER_H
+#define PARSER_H
+
 // C/C++ Standard Librarys
 #include <iostream>
 #include <vector>
@@ -40,3 +43,5 @@ public:
 private:
     int rdk_check_success(int value, const std::string &errmsg);
 };
+
+#endif // PARSER_H

@@ -11,6 +11,9 @@ endif()
 
 # 查找依赖包
 find_package(ament_cmake REQUIRED)
+find_package(rclcpp REQUIRED)
+find_package(sensor_msgs REQUIRED)
+find_package(hbm_img_msgs REQUIRED)
 find_package(OpenCV REQUIRED)
 find_package(nlohmann_json CONFIG REQUIRED)
 
@@ -30,6 +33,13 @@ add_executable(${PROJECT_NAME}
   src/main.cpp
   src/parser.cpp
   src/image_utils.cpp
+)
+
+ament_target_dependencies(${PROJECT_NAME}
+  rclcpp
+  OpenCV
+  sensor_msgs
+  hbm_img_msgs
 )
 
 # 链接库

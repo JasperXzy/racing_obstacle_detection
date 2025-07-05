@@ -79,7 +79,8 @@ int RacingObstacleDetection::load_bin_model()
     rdk_check_success(
         hbDNNInitializeFromFiles(&packed_dnn_handle, &model_file_name, 1),
         "hbDNNInitializeFromFiles failed");
-    std::cout << "\033[31m[INFO] Load D-Robotics Quantize model time = " << std::fixed << std::setprecision(2) << std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::system_clock::now() - begin_time).count() / 1000.0 << " ms\033[0m" << std::endl;
+    std::cout << "\033[31m[INFO] Load D-Robotics Quantize model time = " << std::fixed << std::setprecision(2)
+              << std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::system_clock::now() - begin_time).count() / 1000.0 << " ms\033[0m" << std::endl;
     
     // 1 打印模型名称
     const char **model_name_list;
@@ -231,7 +232,7 @@ int RacingObstacleDetection::load_bin_model()
     // 4.3 打印并检查调整后的输出头顺序的映射
     if (order[0] + order[1] + order[2] + order[3] + order[4] + order[5] == 0 + 1 + 2 + 3 + 4 + 5)
     {
-        std::cout << "[INFO] Outputs order check SUCCESS, continue." << std::endl;
+        std::cout << "[INFO] Outputs Order Check SUCCESS, continue." << std::endl;
         std::cout << "[INFO] Order = {";
         for (int i = 0; i < 6; i++)
         {
@@ -241,7 +242,7 @@ int RacingObstacleDetection::load_bin_model()
     }
     else
     {
-        std::cout << "[ERROR] Outputs order check FAILED, use default" << std::endl;
+        std::cout << "[ERROR] Outputs Order Check FAILED, use default" << std::endl;
         for (int i = 0; i < 6; i++)
             order[i] = i;
     }
