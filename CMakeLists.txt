@@ -14,6 +14,7 @@ find_package(ament_cmake REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(sensor_msgs REQUIRED)
 find_package(hbm_img_msgs REQUIRED)
+find_package(ai_msgs REQUIRED)
 find_package(OpenCV REQUIRED)
 find_package(nlohmann_json CONFIG REQUIRED)
 
@@ -40,6 +41,7 @@ ament_target_dependencies(${PROJECT_NAME}
   OpenCV
   sensor_msgs
   hbm_img_msgs
+  ai_msgs
 )
 
 # 链接库

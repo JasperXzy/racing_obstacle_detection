@@ -272,7 +272,7 @@ void RacingObstacleDetection::detect(uint8_t* ynv12) {
     hbDNNWaitTaskDone(task_handle, 0);
 }
 
-int RacingObstacleDetection::postprocessing(float x_shift, float y_shift, float x_scale, float y_scale)
+int RacingObstacleDetection::postprocessing(float x_shift, float y_shift, float x_scale, float y_scale, int src_w, int src_h)
 {
     // 1. YOLOv8-Detect 后处理
     float CONF_THRES_RAW = -log(1 / score_threshold - 1);       // 利用反函数作用阈值，利用单调性筛选
@@ -568,23 +568,31 @@ int RacingObstacleDetection::postprocessing(float x_shift, float y_shift, float 
         cv::dnn::NMSBoxes(bboxes[i], scores[i], score_threshold, nms_threshold, indices[i], 1.f, nms_top_k);
     }
 
-    // 渲染
-    for (int cls_id = 0; cls_id < class_num; cls_id++)
-    {
-        // 2.1 每一个类别分别渲染
-        for (std::vector<int>::iterator it = indices[cls_id].begin(); it != indices[cls_id].end(); ++it)
-        {
-            // 2.2 获取基本的 bbox 信息
+    detected_objects_.clear();
+    for (int cls_id = 0; cls_id < class_num; cls_id++) {
+        for (std::vector<int>::iterator it = indices[cls_id].begin(); it != indices[cls_id].end(); ++it) {
+            // 坐标转换（逆letterbox变换）
             float x1 = (bboxes[cls_id][*it].x - x_shift) / x_scale;
             float y1 = (bboxes[cls_id][*it].y - y_shift) / y_scale;
-            float x2 = x1 + (bboxes[cls_id][*it].width) / x_scale;
-            float y2 = y1 + (bboxes[cls_id][*it].height) / y_scale;
-            float score = scores[cls_id][*it];
-            std::string name = cls_names_list[cls_id % class_num];
-    
-            // 2.3 打印检测信息
-            std::string text = name + ": " + std::to_string(static_cast<int>(score * 100)) + "%";
-            std::cout << "(" << x1 << " " << y1 << " " << x2 << " " << y2 << "): \t" << text << std::endl;
+            float w = bboxes[cls_id][*it].width / x_scale;
+            float h = bboxes[cls_id][*it].height / y_scale;
+            
+            // 边界检查
+            x1 = std::max(0.0f, std::min(x1, static_cast<float>(src_w)));
+            y1 = std::max(0.0f, std::min(y1, static_cast<float>(src_h)));
+            w = std::min(w, static_cast<float>(src_w) - x1);
+            h = std::min(h, static_cast<float>(src_h) - y1);
+            
+            // 存储检测结果
+            DetectedObject obj;
+            obj.class_name = cls_names_list[cls_id % class_num];
+            obj.confidence = scores[cls_id][*it];
+            obj.x = static_cast<uint32_t>(x1);
+            obj.y = static_cast<uint32_t>(y1);
+            obj.width = static_cast<uint32_t>(w);
+            obj.height = static_cast<uint32_t>(h);
+            
+            detected_objects_.push_back(obj);
         }
     }
 
@@ -603,3 +611,6 @@ void RacingObstacleDetection::release_model(){
     hbDNNRelease(packed_dnn_handle);
 }
 
+const std::vector<DetectedObject>& RacingObstacleDetection::get_detected_objects() const {
+    return detected_objects_;
+}

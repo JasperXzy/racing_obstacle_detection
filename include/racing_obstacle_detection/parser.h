@@ -7,6 +7,7 @@
 #include <algorithm>
 #include <chrono>
 #include <fstream>
+#include <string>
 
 // Third Party Librarys
 #include <opencv2/opencv.hpp>
@@ -20,17 +21,29 @@
 #include "dnn/hb_sys.h"
 
 #include <nlohmann/json.hpp>
+ 
+struct DetectedObject {
+    std::string class_name;
+    float confidence;
+    uint32_t x;
+    uint32_t y;
+    uint32_t width;
+    uint32_t height;
+};
 
 class RacingObstacleDetection
 {
 public:
+    const std::vector<DetectedObject>& get_detected_objects() const;
+
     void load_config();
     int load_bin_model();
     void detect(uint8_t* ynv12);
-    int postprocessing(float x_shift, float y_shift, float x_scale, float y_scale);
+    int postprocessing(float x_shift, float y_shift, float x_scale, float y_scale, int src_w, int src_h);
     void release_model();
 
 private:
+    std::vector<DetectedObject> detected_objects_;
     std::string model_file;
     int class_num;
     std::string dnn_parser;
