@@ -26,7 +26,9 @@ class RacingObstacleDetection
 public:
     void load_config();
     int load_bin_model();
-    void detect(const hbDNNTensorProperties &input_properties, int input_H, int input_W, const uint8_t *ynv12, hbDNNHandle_t dnn_handle, int output_count);
+    void detect(uint8_t* ynv12);
+    int postprocessing(float x_shift, float y_shift, float x_scale, float y_scale);
+    void release_model();
 
 private:
     std::string model_file;
@@ -41,6 +43,20 @@ private:
     float font_size;
     float font_thickness;
     float line_size;
+    int32_t output_count = 0;
+    int32_t input_H, input_W;
+    int order[6] = {0, 1, 2, 3, 4, 5};
+
+    hbDNNHandle_t dnn_handle;
+    hbPackedDNNHandle_t packed_dnn_handle;
+    hbDNNTensorProperties input_properties;
+    hbDNNTensor input;
+    hbDNNTensor* output;
+    hbDNNTaskHandle_t task_handle = nullptr;
+    std::vector<std::vector<cv::Rect2d>> bboxes;
+    std::vector<std::vector<float>> scores;
+    std::vector<std::vector<int>> indices;
+
     int rdk_check_success(int value, const std::string &errmsg);
 };
 

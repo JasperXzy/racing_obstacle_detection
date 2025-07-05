@@ -59,7 +59,7 @@ void RacingObstacleDetection::load_config()
     std::cout << "[INFO] NMS Threshold: " << nms_threshold << std::endl;
     std::cout << "[INFO] Score Threshold: " << score_threshold << std::endl;
     std::cout << "[INFO] NMS Top K: " << nms_top_k << std::endl;
-    std::cout << "[INFO] Regression: " << reg << std::endl;
+    std::cout << "[INFO] regression: " << reg << std::endl;
     std::cout << "[INFO] Font Size: " << font_size << std::endl;
     std::cout << "[INFO] Font Thickness: " << font_thickness << std::endl;
     std::cout << "[INFO] Line Size: " << line_size << std::endl;
@@ -74,7 +74,6 @@ int RacingObstacleDetection::load_bin_model()
     std::cout << "[INFO] OpenCV Version: " << CV_VERSION << std::endl;
     
     auto begin_time = std::chrono::system_clock::now();
-    hbPackedDNNHandle_t packed_dnn_handle;
     const char *model_file_name = model_file.c_str();
     rdk_check_success(
         hbDNNInitializeFromFiles(&packed_dnn_handle, &model_file_name, 1),
@@ -98,7 +97,6 @@ int RacingObstacleDetection::load_bin_model()
     std::cout << "[INFO] Model Name: " << model_name << std::endl;
 
     // 2. 获得Packed模型的第一个模型的handle
-    hbDNNHandle_t dnn_handle;
     rdk_check_success(
         hbDNNGetModelHandle(&dnn_handle, packed_dnn_handle, model_name),
         "hbDNNGetModelHandle failed");
@@ -109,7 +107,6 @@ int RacingObstacleDetection::load_bin_model()
         hbDNNGetInputCount(&input_count, dnn_handle),
         "hbDNNGetInputCount failed");
 
-    hbDNNTensorProperties input_properties;
     rdk_check_success(
         hbDNNGetInputTensorProperties(&input_properties, dnn_handle, 0),
         "hbDNNGetInputTensorProperties failed");
@@ -144,7 +141,6 @@ int RacingObstacleDetection::load_bin_model()
     }
 
     // 3.4. D-Robotics YOLOv8 *.bin 模型输入Tensor数据的valid shape应为(1,3,H,W)
-    int32_t input_H, input_W;
     if (input_properties.validShape.numDimensions == 4)
     {
         input_H = input_properties.validShape.dimensionSize[2];
@@ -161,7 +157,6 @@ int RacingObstacleDetection::load_bin_model()
     }
 
     // 4. 模型输出检查
-    int32_t output_count = 0;
     rdk_check_success(
         hbDNNGetOutputCount(&output_count, dnn_handle),
         "hbDNNGetOutputCount failed");
@@ -195,7 +190,6 @@ int RacingObstacleDetection::load_bin_model()
     }
 
     // 4.2. 调整输出头顺序的映射
-    int order[6] = {0, 1, 2, 3, 4, 5};
     int32_t H_8 = input_H / 8;
     int32_t H_16 = input_H / 16;
     int32_t H_32 = input_H / 32;
@@ -203,11 +197,11 @@ int RacingObstacleDetection::load_bin_model()
     int32_t W_16 = input_W / 16;
     int32_t W_32 = input_W / 32;
     int32_t order_we_want[6][3] = {
-        {H_8, W_8, class_num},       // output[order[3]]: (1, H // 8,  W // 8,  CLASSES_NUM)
+        {H_8, W_8, class_num},       // output[order[3]]: (1, H // 8,  W // 8,  class_num)
         {H_8, W_8, 64},              // output[order[0]]: (1, H // 8,  W // 8,  64)
-        {H_16, W_16, class_num},     // output[order[4]]: (1, H // 16, W // 16, CLASSES_NUM)
+        {H_16, W_16, class_num},     // output[order[4]]: (1, H // 16, W // 16, class_num)
         {H_16, W_16, 64},            // output[order[1]]: (1, H // 16, W // 16, 64)
-        {H_32, W_32, class_num},     // output[order[5]]: (1, H // 32, W // 32, CLASSES_NUM)
+        {H_32, W_32, class_num},     // output[order[5]]: (1, H // 32, W // 32, class_num)
         {H_32, W_32, 64},            // output[order[2]]: (1, H // 32, W // 32, 64)
     };
     for (int i = 0; i < 6; i++)
@@ -253,33 +247,359 @@ int RacingObstacleDetection::load_bin_model()
     return 0;
 }
 
-void RacingObstacleDetection::detect(const hbDNNTensorProperties &input_properties, int input_H, int input_W, const uint8_t *ynv12, hbDNNHandle_t dnn_handle, int output_count)
-{
-    // 1. 将准备好的输入数据放入hbDNNTensor
-    hbDNNTensor input;
+void RacingObstacleDetection::detect(uint8_t* ynv12) {
+    // 1. 准备输入张量
+    task_handle = nullptr;
     input.properties = input_properties;
     hbSysAllocCachedMem(&input.sysMem[0], int(3 * input_H * input_W / 2));
-
     memcpy(input.sysMem[0].virAddr, ynv12, int(3 * input_H * input_W / 2));
     hbSysFlushMem(&input.sysMem[0], HB_SYS_MEM_CACHE_CLEAN);
-
-    // 2. 准备模型输出数据的空间
-    hbDNNTensor *output = new hbDNNTensor[output_count];
-    for (int i = 0; i < 6; i++)
-    {
-        hbDNNTensorProperties &output_properties = output[i].properties;
+ 
+    // 2. 准备输出张量
+    output = new hbDNNTensor[output_count];
+    for (int i = 0; i < 6; i++) {
+        hbDNNTensorProperties& output_properties = output[i].properties;
         hbDNNGetOutputTensorProperties(&output_properties, dnn_handle, i);
         int out_aligned_size = output_properties.alignedByteSize;
-        hbSysMem &mem = output[i].sysMem[0];
+        hbSysMem& mem = output[i].sysMem[0];
         hbSysAllocCachedMem(&mem, out_aligned_size);
     }
-
-    // 3. 推理模型
-    hbDNNTaskHandle_t task_handle = nullptr;
+ 
+    // 3. 执行推理
     hbDNNInferCtrlParam infer_ctrl_param;
     HB_DNN_INITIALIZE_INFER_CTRL_PARAM(&infer_ctrl_param);
     hbDNNInfer(&task_handle, &output, &input, dnn_handle, &infer_ctrl_param);
-
-    // 4. 等待任务结束
     hbDNNWaitTaskDone(task_handle, 0);
 }
+
+int RacingObstacleDetection::postprocessing(float x_shift, float y_shift, float x_scale, float y_scale)
+{
+    // 1. YOLOv8-Detect 后处理
+    float CONF_THRES_RAW = -log(1 / score_threshold - 1);       // 利用反函数作用阈值，利用单调性筛选
+    std::vector<std::vector<cv::Rect2d>> bboxes(class_num);     // 每个id的xyhw 信息使用一个std::vector<cv::Rect2d>存储
+    std::vector<std::vector<float>> scores(class_num);          // 每个id的score信息使用一个std::vector<float>存储
+
+    // 1.1 小目标特征图
+    // output[order[0]]: (1, H // 8,  W // 8,  class_num)
+    // output[order[1]]: (1, H // 8,  W // 8,  4 * reg)
+
+    // 1.1.1 检查反量化类型是否符合RDK Model Zoo的README导出的bin模型规范
+    if (output[order[0]].properties.quantiType != NONE)
+    {
+        std::cout << "output[order[0]] QuantiType is not NONE, please check!" << std::endl;
+        return -1;
+    }
+    if (output[order[1]].properties.quantiType != SCALE)
+    {
+        std::cout << "output[order[1]] QuantiType is not SCALE, please check!" << std::endl;
+        return -1;
+    }
+
+    // 1.1.2 对缓存的BPU内存进行刷新
+    hbSysFlushMem(&(output[order[0]].sysMem[0]), HB_SYS_MEM_CACHE_INVALIDATE);
+    hbSysFlushMem(&(output[order[1]].sysMem[0]), HB_SYS_MEM_CACHE_INVALIDATE);
+
+    // 1.1.3 将BPU推理完的内存地址转换为对应类型的指针
+    auto *s_cls_raw = reinterpret_cast<float *>(output[order[0]].sysMem[0].virAddr);
+    auto *s_bbox_raw = reinterpret_cast<int32_t *>(output[order[1]].sysMem[0].virAddr);
+    auto *s_bbox_scale = reinterpret_cast<float *>(output[order[1]].properties.scale.scaleData);
+    for (int h = 0; h < (input_H / 8); h++)
+    {
+        for (int w = 0; w < (input_W / 8); w++)
+        {
+            // 1.1.4 取对应H和W位置的C通道, 记为数组的形式
+            // cls对应class_num个分数RAW值, 也就是Sigmoid计算之前的值，这里利用函数单调性先筛选, 再计算
+            // bbox对应4个坐标乘以reg的RAW值, 也就是DFL计算之前的值, 仅仅分数合格了, 才会进行这部分的计算
+            float *cur_s_cls_raw = s_cls_raw;
+            int32_t *cur_s_bbox_raw = s_bbox_raw;
+
+            // 1.1.5 找到分数的最大值索引, 如果最大值小于阈值，则舍去
+            int cls_id = 0;
+            for (int i = 1; i < class_num; i++)
+            {
+                if (cur_s_cls_raw[i] > cur_s_cls_raw[cls_id])
+                {
+                    cls_id = i;
+                }
+            }
+
+            // 1.1.6 不合格则直接跳过, 避免无用的反量化, DFL和dist2bbox计算
+            if (cur_s_cls_raw[cls_id] < CONF_THRES_RAW)
+            {
+                s_cls_raw += class_num;
+                s_bbox_raw += reg * 4;
+                continue;
+            }
+
+            // 1.1.7 计算这个目标的分数
+            float score = 1 / (1 + std::exp(-cur_s_cls_raw[cls_id]));
+
+            // 1.1.8 对bbox_raw信息进行反量化, DFL计算
+            float ltrb[4], sum, dfl;
+            for (int i = 0; i < 4; i++)
+            {
+                ltrb[i] = 0.;
+                sum = 0.;
+                for (int j = 0; j < reg; j++)
+                {
+                    int index_id = reg * i + j;
+                    dfl = std::exp(float(cur_s_bbox_raw[index_id]) * s_bbox_scale[index_id]);
+                    ltrb[i] += dfl * j;
+                    sum += dfl;
+                }
+                ltrb[i] /= sum;
+            }
+
+            // 1.1.9 剔除不合格的框   if(x1 >= x2 || y1 >=y2) continue;
+            if (ltrb[2] + ltrb[0] <= 0 || ltrb[3] + ltrb[1] <= 0)
+            {
+                s_cls_raw += class_num;
+                s_bbox_raw += reg * 4;
+                continue;
+            }
+
+            // 1.1.10 dist 2 bbox (ltrb 2 xyxy)
+            float x1 = (w + 0.5 - ltrb[0]) * 8.0;
+            float y1 = (h + 0.5 - ltrb[1]) * 8.0;
+            float x2 = (w + 0.5 + ltrb[2]) * 8.0;
+            float y2 = (h + 0.5 + ltrb[3]) * 8.0;
+
+            // 1.1.11 对应类别加入到对应的std::vector中
+            bboxes[cls_id].push_back(cv::Rect2d(x1, y1, x2 - x1, y2 - y1));
+            scores[cls_id].push_back(score);
+
+            s_cls_raw += class_num;
+            s_bbox_raw += reg * 4;
+        }
+    }
+
+    // 1.2 中目标特征图
+    // output[order[2]]: (1, H // 16,  W // 16,  class_num)
+    // output[order[3]]: (1, H // 16,  W // 16,  4 * reg)
+
+    // 1.2.1 检查反量化类型是否符合RDK Model Zoo的README导出的bin模型规范
+    if (output[order[2]].properties.quantiType != NONE)
+    {
+        std::cout << "output[order[2]] QuantiType is not NONE, please check!" << std::endl;
+        return -1;
+    }
+    if (output[order[3]].properties.quantiType != SCALE)
+    {
+        std::cout << "output[order[3]] QuantiType is not SCALE, please check!" << std::endl;
+        return -1;
+    }
+
+    // 1.2.2 对缓存的BPU内存进行刷新
+    hbSysFlushMem(&(output[order[2]].sysMem[0]), HB_SYS_MEM_CACHE_INVALIDATE);
+    hbSysFlushMem(&(output[order[3]].sysMem[0]), HB_SYS_MEM_CACHE_INVALIDATE);
+
+    // 1.2.3 将BPU推理完的内存地址转换为对应类型的指针
+    auto *m_cls_raw = reinterpret_cast<float *>(output[order[2]].sysMem[0].virAddr);
+    auto *m_bbox_raw = reinterpret_cast<int32_t *>(output[order[3]].sysMem[0].virAddr);
+    auto *m_bbox_scale = reinterpret_cast<float *>(output[order[3]].properties.scale.scaleData);
+    for (int h = 0; h < (input_H / 16); h++)
+    {
+        for (int w = 0; w < (input_W / 16); w++)
+        {
+            // 1.2.4 取对应H和W位置的C通道, 记为数组的形式
+            // cls对应class_num个分数RAW值, 也就是Sigmoid计算之前的值，这里利用函数单调性先筛选, 再计算
+            // bbox对应4个坐标乘以reg的RAW值, 也就是DFL计算之前的值, 仅仅分数合格了, 才会进行这部分的计算
+            float *cur_m_cls_raw = m_cls_raw;
+            int32_t *cur_m_bbox_raw = m_bbox_raw;
+
+            // 1.2.5 找到分数的最大值索引, 如果最大值小于阈值，则舍去
+            int cls_id = 0;
+            for (int i = 1; i < class_num; i++)
+            {
+                if (cur_m_cls_raw[i] > cur_m_cls_raw[cls_id])
+                {
+                    cls_id = i;
+                }
+            }
+
+            // 1.2.6 不合格则直接跳过, 避免无用的反量化, DFL和dist2bbox计算
+            if (cur_m_cls_raw[cls_id] < CONF_THRES_RAW)
+            {
+                m_cls_raw += class_num;
+                m_bbox_raw += reg * 4;
+                continue;
+            }
+
+            // 1.2.7 计算这个目标的分数
+            float score = 1 / (1 + std::exp(-cur_m_cls_raw[cls_id]));
+
+            // 1.2.8 对bbox_raw信息进行反量化, DFL计算
+            float ltrb[4], sum, dfl;
+            for (int i = 0; i < 4; i++)
+            {
+                ltrb[i] = 0.;
+                sum = 0.;
+                for (int j = 0; j < reg; j++)
+                {
+                    int index_id = reg * i + j;
+                    dfl = std::exp(float(cur_m_bbox_raw[index_id]) * m_bbox_scale[index_id]);
+                    ltrb[i] += dfl * j;
+                    sum += dfl;
+                }
+                ltrb[i] /= sum;
+            }
+
+            // 1.2.9 剔除不合格的框   if(x1 >= x2 || y1 >=y2) continue;
+            if (ltrb[2] + ltrb[0] <= 0 || ltrb[3] + ltrb[1] <= 0)
+            {
+                m_cls_raw += class_num;
+                m_bbox_raw += reg * 4;
+                continue;
+            }
+
+            // 1.2.10 dist 2 bbox (ltrb 2 xyxy)
+            float x1 = (w + 0.5 - ltrb[0]) * 16.0;
+            float y1 = (h + 0.5 - ltrb[1]) * 16.0;
+            float x2 = (w + 0.5 + ltrb[2]) * 16.0;
+            float y2 = (h + 0.5 + ltrb[3]) * 16.0;
+
+            // 1.2.11 对应类别加入到对应的std::vector中
+            bboxes[cls_id].push_back(cv::Rect2d(x1, y1, x2 - x1, y2 - y1));
+            scores[cls_id].push_back(score);
+
+            m_cls_raw += class_num;
+            m_bbox_raw += reg * 4;
+        }
+    }
+
+    // 1.3 大目标特征图
+    // output[order[4]]: (1, H // 32,  W // 32,  class_num)
+    // output[order[5]]: (1, H // 32,  W // 32,  4 * reg)
+
+    // 1.3.1 检查反量化类型是否符合RDK Model Zoo的README导出的bin模型规范
+    if (output[order[4]].properties.quantiType != NONE)
+    {
+        std::cout << "output[order[4]] QuantiType is not NONE, please check!" << std::endl;
+        return -1;
+    }
+    if (output[order[5]].properties.quantiType != SCALE)
+    {
+        std::cout << "output[order[5]] QuantiType is not SCALE, please check!" << std::endl;
+        return -1;
+    }
+
+    // 1.3.2 对缓存的BPU内存进行刷新
+    hbSysFlushMem(&(output[order[4]].sysMem[0]), HB_SYS_MEM_CACHE_INVALIDATE);
+    hbSysFlushMem(&(output[order[5]].sysMem[0]), HB_SYS_MEM_CACHE_INVALIDATE);
+
+    // 1.3.3 将BPU推理完的内存地址转换为对应类型的指针
+    auto *l_cls_raw = reinterpret_cast<float *>(output[order[4]].sysMem[0].virAddr);
+    auto *l_bbox_raw = reinterpret_cast<int32_t *>(output[order[5]].sysMem[0].virAddr);
+    auto *l_bbox_scale = reinterpret_cast<float *>(output[order[5]].properties.scale.scaleData);
+    for (int h = 0; h < (input_H / 32); h++)
+    {
+        for (int w = 0; w < (input_W / 32); w++)
+        {
+            // 1.3.4 取对应H和W位置的C通道, 记为数组的形式
+            // cls对应class_num个分数RAW值, 也就是Sigmoid计算之前的值，这里利用函数单调性先筛选, 再计算
+            // bbox对应4个坐标乘以reg的RAW值, 也就是DFL计算之前的值, 仅仅分数合格了, 才会进行这部分的计算
+            float *cur_l_cls_raw = l_cls_raw;
+            int32_t *cur_l_bbox_raw = l_bbox_raw;
+
+            // 1.3.5 找到分数的最大值索引, 如果最大值小于阈值，则舍去
+            int cls_id = 0;
+            for (int i = 1; i < class_num; i++)
+            {
+                if (cur_l_cls_raw[i] > cur_l_cls_raw[cls_id])
+                {
+                    cls_id = i;
+                }
+            }
+
+            // 1.3.6 不合格则直接跳过, 避免无用的反量化, DFL和dist2bbox计算
+            if (cur_l_cls_raw[cls_id] < CONF_THRES_RAW)
+            {
+                l_cls_raw += class_num;
+                l_bbox_raw += reg * 4;
+                continue;
+            }
+
+            // 1.3.7 计算这个目标的分数
+            float score = 1 / (1 + std::exp(-cur_l_cls_raw[cls_id]));
+
+            // 1.3.8 对bbox_raw信息进行反量化, DFL计算
+            float ltrb[4], sum, dfl;
+            for (int i = 0; i < 4; i++)
+            {
+                ltrb[i] = 0.;
+                sum = 0.;
+                for (int j = 0; j < reg; j++)
+                {
+                    int index_id = reg * i + j;
+                    dfl = std::exp(float(cur_l_bbox_raw[index_id]) * l_bbox_scale[index_id]);
+                    ltrb[i] += dfl * j;
+                    sum += dfl;
+                }
+                ltrb[i] /= sum;
+            }
+
+            // 1.3.9 剔除不合格的框   if(x1 >= x2 || y1 >=y2) continue;
+            if (ltrb[2] + ltrb[0] <= 0 || ltrb[3] + ltrb[1] <= 0)
+            {
+                l_cls_raw += class_num;
+                l_bbox_raw += reg * 4;
+                continue;
+            }
+
+            // 1.3.10 dist 2 bbox (ltrb 2 xyxy)
+            float x1 = (w + 0.5 - ltrb[0]) * 32.0;
+            float y1 = (h + 0.5 - ltrb[1]) * 32.0;
+            float x2 = (w + 0.5 + ltrb[2]) * 32.0;
+            float y2 = (h + 0.5 + ltrb[3]) * 32.0;
+
+            // 1.3.11 对应类别加入到对应的std::vector中
+            bboxes[cls_id].push_back(cv::Rect2d(x1, y1, x2 - x1, y2 - y1));
+            scores[cls_id].push_back(score);
+
+            l_cls_raw += class_num;
+            l_bbox_raw += reg * 4;
+        }
+    }
+
+    // 1.4 对每一个类别进行NMS
+    std::vector<std::vector<int>> indices(class_num);
+    for (int i = 0; i < class_num; i++)
+    {
+        cv::dnn::NMSBoxes(bboxes[i], scores[i], score_threshold, nms_threshold, indices[i], 1.f, nms_top_k);
+    }
+
+    // 渲染
+    for (int cls_id = 0; cls_id < class_num; cls_id++)
+    {
+        // 2.1 每一个类别分别渲染
+        for (std::vector<int>::iterator it = indices[cls_id].begin(); it != indices[cls_id].end(); ++it)
+        {
+            // 2.2 获取基本的 bbox 信息
+            float x1 = (bboxes[cls_id][*it].x - x_shift) / x_scale;
+            float y1 = (bboxes[cls_id][*it].y - y_shift) / y_scale;
+            float x2 = x1 + (bboxes[cls_id][*it].width) / x_scale;
+            float y2 = y1 + (bboxes[cls_id][*it].height) / y_scale;
+            float score = scores[cls_id][*it];
+            std::string name = cls_names_list[cls_id % class_num];
+    
+            // 2.3 打印检测信息
+            std::string text = name + ": " + std::to_string(static_cast<int>(score * 100)) + "%";
+            std::cout << "(" << x1 << " " << y1 << " " << x2 << " " << y2 << "): \t" << text << std::endl;
+        }
+    }
+
+    // 2. 释放任务
+    hbDNNReleaseTask(task_handle);
+
+    // 3. 释放内存
+    hbSysFreeMem(&(input.sysMem[0]));
+    for (int i = 0; i < 6; i++)
+        hbSysFreeMem(&(output[i].sysMem[0]));
+
+    return 0;
+}
+
+void RacingObstacleDetection::release_model(){
+    hbDNNRelease(packed_dnn_handle);
+}
+
