@@ -1,37 +1,51 @@
-#pragma once
-
-#include <memory>
+// C/C++ Standard Librarys
+#include <iostream>
 #include <vector>
-#include <string>
+#include <algorithm>
 #include <chrono>
-#include "ai_msgs/msg/perception_targets.hpp"
-#include "rclcpp/rclcpp.hpp"
+#include <fstream>
 
-// 单目标推理结果结构体
-struct DetResult {
-    int class_id;
-    float confidence;
-    float xmin;
-    float ymin;
-    float xmax;
-    float ymax;
-    std::string class_name;
-};
+// Third Party Librarys
+#include <opencv2/opencv.hpp>
+#include <opencv2/dnn/dnn.hpp>
 
-class Yolo11Parser {
+// RDK BPU libDNN API
+#include "dnn/hb_dnn.h"
+#include "dnn/hb_dnn_ext.h"
+#include "dnn/plugin/hb_dnn_layer.h"
+#include "dnn/plugin/hb_dnn_plugin.h"
+#include "dnn/hb_sys.h"
+
+#include <nlohmann/json.hpp>
+
+#define RDK_CHECK_SUCCESS(value, errmsg)                                         \
+    do                                                                           \
+    {                                                                            \
+        auto ret_code = value;                                                   \
+        if (ret_code != 0)                                                       \
+        {                                                                        \
+            std::cout << "[ERROR] " << __FILE__ << ":" << __LINE__ << std::endl; \
+            std::cout << errmsg << ", error code:" << ret_code << std::endl;     \
+            return ret_code;                                                     \
+        }                                                                        \
+    } while (0);
+
+class RacingObstacleDetection
+{
 public:
-    Yolo11Parser();
-    // 解析函数: 从BPU模型输出，后处理出所有目标并填充DetResult
-    int postprocess(
-        hbDNNTensor* outputs, int output_count, // 推理输出
-        int input_width, int input_height,      // 输入尺寸
-        float conf_threshold, float nms_threshold,
-        std::vector<std::string>& class_names,
-        std::vector<DetResult>& results);
-
-    // 发布到ros2
-    void publish_to_ros(
-        rclcpp::Publisher<ai_msgs::msg::PerceptionTargets>::SharedPtr pub,
-        const std::vector<DetResult>& results,
-        const rclcpp::Time& stamp = rclcpp::Clock().now());
+    std::string model_file;
+    int class_num;
+    std::string dnn_parser;
+    std::vector<std::string> cls_names_list;
+    int preprocess_type;
+    float nms_threshold;
+    float score_threshold;
+    int nms_top_k;
+    int reg;
+    float font_size;
+    float font_thickness;
+    float line_size;
+ 
+    void load_config();
+    
 };

@@ -308,8 +308,8 @@ int main()
 
     // 3.1 利用OpenCV读取图像
     // 3.1 Read image using OpenCV
-    cv::Mat img = cv::imread(TESR_IMG_PATH);
-    std::cout << "img path: " << TESR_IMG_PATH << std::endl;
+    cv::Mat img = cv::imread(TEST_IMG_PATH);
+    std::cout << "img path: " << TEST_IMG_PATH << std::endl;
     std::cout << "img (cols, rows, channels): (";
     std::cout << img.rows << ", ";
     std::cout << img.cols << ", ";

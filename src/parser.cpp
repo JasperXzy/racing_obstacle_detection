@@ -1,70 +1,55 @@
-#include "parser.h"
-#include "sensor_msgs/msg/region_of_interest.hpp"
+#include "racing_obstacle_detection/parser.h"
 
-// OpenCV NMS
-#include <opencv2/opencv.hpp>
-#include <opencv2/dnn/dnn.hpp>
-
-Yolo11Parser::Yolo11Parser() {}
-
-int Yolo11Parser::postprocess(
-    hbDNNTensor* outputs, int output_count,
-    int input_width, int input_height,
-    float conf_threshold, float nms_threshold,
-    std::vector<std::string>& class_names,
-    std::vector<DetResult>& results)
+void RacingObstacleDetection::load_config()
 {
-    // 假定outputs的格式、顺序你已经和你的模型配置对好（同你主推理代码）
-    // 假定所有输出都已经同步到CPU内存
-
-    // <<<<<<<<<<<< 需根据你的模型实际输出格式略做适配 >>>>>>>>>>>
-    // 本例使用YOLO11/yolov8(RDK导出)兼容格式: 3组特征层,每组2个输出(分类+回归)
-    // 建议先复用你已有主程序的后处理, 输出每一帧 DetResult
-
-    // 假设你已经from outputs 得到 float xmin,ymin,xmax,ymax,class_id,confidence,class_name
-    // 全部塞到 results
-
-    // 例：(这里只做示意，实际逻辑建议copy你自己主程序的代码)
-    // outputs ==> postprocess ==> results.push_back({class_id, conf, xmin, ymin, xmax, ymax, class_name})
-    // ...
-    return 0;
-}
-
-void Yolo11Parser::publish_to_ros(
-    rclcpp::Publisher<ai_msgs::msg::PerceptionTargets>::SharedPtr pub,
-    const std::vector<DetResult>& results,
-    const rclcpp::Time& stamp)
-{
-    ai_msgs::msg::PerceptionTargets msg;
-    msg.header.stamp = stamp;
-    msg.header.frame_id = "camera";
-    msg.fps = 0; // 可选
-
-    for (const auto& det : results) {
-        ai_msgs::msg::PerceptionTarget target;
-        target.type = det.class_name;
-        target.track_id = 0;
-
-        ai_msgs::msg::Roi roi;
-        roi.type = "";
-        roi.rect.x_offset = static_cast<uint32_t>(std::max(det.xmin, 0.f));
-        roi.rect.y_offset = static_cast<uint32_t>(std::max(det.ymin, 0.f));
-        roi.rect.width    = static_cast<uint32_t>(std::max(det.xmax - det.xmin, 0.f));
-        roi.rect.height   = static_cast<uint32_t>(std::max(det.ymax - det.ymin, 0.f));
-        roi.confidence = det.confidence;
-        roi.rect.do_rectify = false;
-
-        target.rois.push_back(roi);
-        msg.targets.push_back(target);
+    std::ifstream config_file("config/yolov8.json");
+    if (!config_file.is_open())
+    {
+        std::cerr << "Failed to open config file." << std::endl;
+        return;
     }
-    pub->publish(msg);
+ 
+    nlohmann::json config;
+    config_file >> config;
+ 
+    model_file = config["model_file"];
+    class_num = config["class_num"];
+    dnn_parser = config["dnn_Parser"];
+    cls_names_list = config["cls_names_list"].get<std::vector<std::string>>();
+    preprocess_type = config["preprocess_type"];
+    nms_threshold = config["nms_threshold"];
+    score_threshold = config["score_threshold"];
+    nms_top_k = config["nms_top_k"];
+    reg = config["reg"];
+    font_size = config["font_size"];
+    font_thickness = config["font_thickness"];
+    line_size = config["line_size"];
+
+    config_file.close();
+    
+    std::cout << "Model File: " << model_file << std::endl;
+    std::cout << "DNN Parser: " << dnn_parser << std::endl;
+    std::cout << "Class Number: " << class_num << std::endl;
+    std::cout << "Class Names List: ";
+    for (const auto& name : cls_names_list)
+    {
+        std::cout << name << " ";
+    }
+    std::cout << std::endl;
+    if (preprocess_type == 0)
+    {
+        std::cout << "Preprocess Type: Resize" << std::endl;
+    }
+    else if (preprocess_type == 1)
+    {
+        std::cout << "Preprocess Type: Letterbox" << std::endl;
+    }
+    std::cout << "NMS Threshold: " << nms_threshold << std::endl;
+    std::cout << "Score Threshold: " << score_threshold << std::endl;
+    std::cout << "NMS Top K: " << nms_top_k << std::endl;
+    std::cout << "Regression: " << reg << std::endl;
+    std::cout << "Font Size: " << font_size << std::endl;
+    std::cout << "Font Thickness: " << font_thickness << std::endl;
+    std::cout << "Line Size: " << line_size << std::endl;
+    std::cout << "Load Config Successfully!" << std::endl;
 }
-
-auto pub = node->create_publisher<ai_msgs::msg::PerceptionTargets>("/racing_obstacle_detection", 10);
-
-// .... 你的推理代码得到outputs[6] ...
-
-Yolo11Parser parser;
-std::vector<DetResult> dets;
-parser.postprocess(outputs, 6, input_W, input_H, SCORE_THRESHOLD, NMS_THRESHOLD, object_names, dets);
-parser.publish_to_ros(pub, dets, node->now());

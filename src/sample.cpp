@@ -16,17 +16,13 @@ limitations under the License.
 
 * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
 
-// 注意: 此程序在RDK板端端运行
-// Attention: This program runs on RDK board.
-
 // D-Robotics *.bin 模型路径
 // Path of D-Robotics *.bin model.
-#define MODEL_PATH "../../ptq_models/yolo11x_detect_bayese_640x640_nv12_modified.bin"
+#define MODEL_PATH "/userdata/racing_obstacle_detection/yolov8n_demo/yolov8n_detect_bayese_640x640_nv12_modified_cv2_cv3.bin"
 
 // 推理使用的测试图片路径
 // Path of the test image used for inference.
-#define TESR_IMG_PATH "../../../../../../resource/datasets/COCO2017/assets/bus.jpg"
-// #define TESR_IMG_PATH "../../../../datasets/COCO2017/assets/bus.jpg"
+#define TEST_IMG_PATH "/userdata/racing_obstacle_detection/yolov8n_demo/3511.jpg"
 
 // 前处理方式选择, 0:Resize, 1:LetterBox
 // Preprocessing method selection, 0: Resize, 1: LetterBox
@@ -36,15 +32,15 @@ limitations under the License.
 
 // 推理结果保存路径
 // Path where the inference result will be saved
-#define IMG_SAVE_PATH "cpp_result.jpg"
+#define IMG_SAVE_PATH "result.jpg"
 
 // 模型的类别数量, 默认80
 // Number of classes in the model, default is 80
-#define CLASSES_NUM 80
+#define CLASSES_NUM 1
 
 // NMS的阈值, 默认0.45
 // Non-Maximum Suppression (NMS) threshold, default is 0.45
-#define NMS_THRESHOLD 0.7
+#define NMS_THRESHOLD 0.5
 
 // 分数阈值, 默认0.25
 // Score threshold, default is 0.25
@@ -100,10 +96,9 @@ limitations under the License.
     } while (0);
 
 // COCO Names
-std::vector<std::string> object_names = {
-    "person", "bicycle", "car", "motorcycle", "airplane", "bus", "train", "truck", "boat", "traffic light", "fire hydrant", "stop sign", "parking meter", "bench", "bird", "cat", "dog", "horse", "sheep", "cow", "elephant", "bear", "zebra", "giraffe", "backpack", "umbrella", "handbag", "tie", "suitcase", "frisbee", "skis", "snowboard", "sports ball", "kite", "baseball bat", "baseball glove", "skateboard", "surfboard", "tennis racket", "bottle", "wine glass", "cup", "fork", "knife", "spoon", "bowl", "banana", "apple", "sandwich", "orange", "broccoli", "carrot", "hot dog", "pizza", "donut", "cake", "chair", "couch", "potted plant", "bed", "dining table", "toilet", "tv", "laptop", "mouse", "remote", "keyboard", "cell phone", "microwave", "oven", "toaster", "sink", "refrigerator", "book", "clock", "vase", "scissors", "teddy bear", "hair drier", "toothbrush"};
+std::vector<std::string> object_names = {"obstacle"};
 
-int main()
+int detect()
 {
     // 0. 加载bin模型
     auto begin_time = std::chrono::system_clock::now();
@@ -313,8 +308,8 @@ int main()
 
     // 3.1 利用OpenCV读取图像
     // 3.1 Read image using OpenCV
-    cv::Mat img = cv::imread(TESR_IMG_PATH);
-    std::cout << "img path: " << TESR_IMG_PATH << std::endl;
+    cv::Mat img = cv::imread(TEST_IMG_PATH);
+    std::cout << "img path: " << TEST_IMG_PATH << std::endl;
     std::cout << "img (cols, rows, channels): (";
     std::cout << img.rows << ", ";
     std::cout << img.cols << ", ";
