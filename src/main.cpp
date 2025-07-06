@@ -4,6 +4,7 @@
 #include <hbm_img_msgs/msg/hbm_msg1080_p.hpp>
 #include <chrono>
 #include <memory>
+#include <opencv2/opencv.hpp>
 #include "ai_msgs/msg/perception_targets.hpp"
 #include "ai_msgs/msg/roi.hpp"
 #include "sensor_msgs/msg/region_of_interest.hpp"
@@ -24,7 +25,13 @@ public:
             rclcpp::SensorDataQoS(),
             std::bind(&ImageNV12Subscriber::img_callback, this, std::placeholders::_1));
             last_time_ = std::chrono::steady_clock::now();
+
+        // cv::namedWindow("Obstacle Detection", cv::WINDOW_AUTOSIZE);
     }
+
+    // ~ImageNV12Subscriber() {
+    //     cv::destroyWindow("Obstacle Detection");
+    // }
  
 private:
     void img_callback(const hbm_img_msgs::msg::HbmMsg1080P::SharedPtr msg)
@@ -44,14 +51,62 @@ private:
             x_shift, y_shift, x_scale, y_scale
         );
 
-        // LetterBox Debug
-        // cv::Mat yuv(dst_h * 3 / 2, dst_w, CV_8UC1, output_nv12.data());
-        // cv::Mat bgr;
-        // cv::cvtColor(yuv, bgr, cv::COLOR_YUV2BGR_NV12); 
-        // cv::imwrite("debug_letterbox.jpg", bgr);
+        // // 将NV12转换为BGR格式用于显示
+        // cv::Mat nv12_mat(dst_h * 3 / 2, dst_w, CV_8UC1, output_nv12.data());
+        // cv::Mat bgr_mat;
+        // cv::cvtColor(nv12_mat, bgr_mat, cv::COLOR_YUV2BGR_NV12);
         
         detector_.detect(output_nv12.data());
         detector_.postprocessing(x_shift, y_shift, x_scale, y_scale, src_w, src_h);
+ 
+        // // 获取检测结果并在图像上绘制
+        // const auto& objects = detector_.get_detected_objects();
+        // for (const auto& obj : objects) {
+        //     // 关键修复：将原始图像坐标转换为letterbox图像坐标
+        //     int box_x = static_cast<int>(obj.x * x_scale + x_shift);
+        //     int box_y = static_cast<int>(obj.y * y_scale + y_shift);
+        //     int box_width = static_cast<int>(obj.width * x_scale);
+        //     int box_height = static_cast<int>(obj.height * y_scale);
+            
+        //     // 确保坐标在图像范围内
+        //     box_x = std::max(0, std::min(box_x, dst_w - 1));
+        //     box_y = std::max(0, std::min(box_y, dst_h - 1));
+        //     box_width = std::max(1, std::min(box_width, dst_w - box_x));
+        //     box_height = std::max(1, std::min(box_height, dst_h - box_y));
+ 
+        //     // 绘制边界框
+        //     cv::rectangle(bgr_mat, 
+        //                   cv::Point(box_x, box_y), 
+        //                   cv::Point(box_x + box_width, box_y + box_height),
+        //                   cv::Scalar(0, 255, 0),  // 绿色框
+        //                   2);
+            
+        //     // 创建标签文本 (类别 + 置信度)
+        //     std::string label = obj.class_name + ": " + std::to_string(obj.confidence);
+        //     label = label.substr(0, label.find(".") + 3); // 保留2位小数
+            
+        //     // 在框上方绘制标签背景
+        //     int baseline;
+        //     cv::Size text_size = cv::getTextSize(label, cv::FONT_HERSHEY_SIMPLEX, 0.5, 1, &baseline);
+        //     int text_y = std::max(box_y - 5, text_size.height + 5); // 确保文本不超出图像顶部
+            
+        //     cv::rectangle(bgr_mat, 
+        //                   cv::Point(box_x, text_y - text_size.height - 5),
+        //                   cv::Point(box_x + text_size.width, text_y),
+        //                   cv::Scalar(0, 255, 0),
+        //                   cv::FILLED);
+            
+        //     // 绘制标签文本
+        //     cv::putText(bgr_mat, label,
+        //                 cv::Point(box_x, text_y - 5),
+        //                 cv::FONT_HERSHEY_SIMPLEX, 0.5,
+        //                 cv::Scalar(0, 0, 0),  // 黑色文本
+        //                 1);
+        // }
+        
+        // // 显示处理后的图像
+        // cv::imshow("Obstacle Detection", bgr_mat);
+        // cv::waitKey(1);
 
         auto header = std_msgs::msg::Header();
         header.stamp = this->now();
@@ -81,7 +136,7 @@ private:
         for (const auto& obj : objects) {
             ai_msgs::msg::Target target;
             target.type = obj.class_name;
-            target.track_id = 0;  // 无跟踪功能
+            target.track_id = 0;
             
             // 创建ROI
             ai_msgs::msg::Roi roi;
@@ -111,7 +166,8 @@ int main(int argc, char * argv[]) {
     RacingObstacleDetection obstacleDetector;
     obstacleDetector.load_config();
     int code = obstacleDetector.load_bin_model();
-    std::cout << "[INFO] Racing Obstacle Detection completed with code: " << code << std::endl << std::endl;
+    std::cout << "[INFO] Racing Obstacle Detection Init completed with code: " << code << std::endl << std::endl;
+    std::cout << "================================================" << std::endl << std::endl;
 
     rclcpp::init(argc, argv);
     
