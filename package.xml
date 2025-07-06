@@ -13,6 +13,9 @@
   <depend>OpenCV</depend>
   <depend>nlohmann_json</depend>
 
+  <exec_depend>launch</exec_depend>
+  <exec_depend>launch_ros</exec_depend>
+
   <test_depend>ament_lint_auto</test_depend>
   <test_depend>ament_lint_common</test_depend>
 

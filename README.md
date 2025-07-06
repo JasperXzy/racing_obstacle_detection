@@ -1,6 +1,18 @@
 # racing_obstacle_detection
 
 ```
+ros2 launch origincar_bringup camera.launch.py
+```
+
+```
+ros2 launch racing_obstacle_detection obstacle_detection.launch.py
+```
+
+```
+ros2 topic echo /racing_obstacle_detection
+```
+
+```
 root@ubuntu:/userdata# ros2 topic list
 /camera_info
 /cmd_vel

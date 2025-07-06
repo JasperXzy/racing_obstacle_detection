@@ -59,6 +59,11 @@ install(DIRECTORY include/
   DESTINATION include
 )
 
+install(DIRECTORY
+  launch
+  DESTINATION share/${PROJECT_NAME}/
+)
+
 # 安装可执行文件
 install(TARGETS ${PROJECT_NAME}
   RUNTIME DESTINATION lib/${PROJECT_NAME}

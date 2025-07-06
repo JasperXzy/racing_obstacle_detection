@@ -47,7 +47,7 @@ private:
         // LetterBox Debug
         // cv::Mat yuv(dst_h * 3 / 2, dst_w, CV_8UC1, output_nv12.data());
         // cv::Mat bgr;
-        // cv::cvtColor(yuv, bgr, cv::COLOR_YUV2BGR_NV12);
+        // cv::cvtColor(yuv, bgr, cv::COLOR_YUV2BGR_NV12); 
         // cv::imwrite("debug_letterbox.jpg", bgr);
         
         detector_.detect(output_nv12.data());

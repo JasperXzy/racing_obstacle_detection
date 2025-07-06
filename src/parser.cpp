@@ -59,7 +59,7 @@ void RacingObstacleDetection::load_config()
     std::cout << "[INFO] NMS Threshold: " << nms_threshold << std::endl;
     std::cout << "[INFO] Score Threshold: " << score_threshold << std::endl;
     std::cout << "[INFO] NMS Top K: " << nms_top_k << std::endl;
-    std::cout << "[INFO] regression: " << reg << std::endl;
+    std::cout << "[INFO] Regression: " << reg << std::endl;
     std::cout << "[INFO] Font Size: " << font_size << std::endl;
     std::cout << "[INFO] Font Thickness: " << font_thickness << std::endl;
     std::cout << "[INFO] Line Size: " << line_size << std::endl;
