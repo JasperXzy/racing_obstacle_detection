@@ -26,16 +26,18 @@ public:
             std::bind(&ImageNV12Subscriber::img_callback, this, std::placeholders::_1));
             last_time_ = std::chrono::steady_clock::now();
 
-        // cv::namedWindow("Obstacle Detection", cv::WINDOW_AUTOSIZE);
+        // cv::namedWindow("Obstacle Detection", cv::WINDOW_AUTOSIZE); 
     }
 
     // ~ImageNV12Subscriber() {
-    //     cv::destroyWindow("Obstacle Detection");
+    //     cv::destroyWindow("Obstacle Detection"); 
     // }
  
 private:
     void img_callback(const hbm_img_msgs::msg::HbmMsg1080P::SharedPtr msg)
     {
+        ++frame_count_; 
+
         auto& frame = msg->data;
         int src_w = 640, src_h = 480;
         int dst_w = 640, dst_h = 640;
@@ -62,12 +64,13 @@ private:
         // // 获取检测结果并在图像上绘制
         // const auto& objects = detector_.get_detected_objects();
         // for (const auto& obj : objects) {
-        //     // 关键修复：将原始图像坐标转换为letterbox图像坐标
+
+        //     // 将原始图像坐标转换为letterbox图像坐标
         //     int box_x = static_cast<int>(obj.x * x_scale + x_shift);
         //     int box_y = static_cast<int>(obj.y * y_scale + y_shift);
         //     int box_width = static_cast<int>(obj.width * x_scale);
         //     int box_height = static_cast<int>(obj.height * y_scale);
-            
+
         //     // 确保坐标在图像范围内
         //     box_x = std::max(0, std::min(box_x, dst_w - 1));
         //     box_y = std::max(0, std::min(box_y, dst_h - 1));
@@ -78,17 +81,17 @@ private:
         //     cv::rectangle(bgr_mat, 
         //                   cv::Point(box_x, box_y), 
         //                   cv::Point(box_x + box_width, box_y + box_height),
-        //                   cv::Scalar(0, 255, 0),  // 绿色框
+        //                   cv::Scalar(0, 255, 0),  
         //                   2);
             
         //     // 创建标签文本 (类别 + 置信度)
         //     std::string label = obj.class_name + ": " + std::to_string(obj.confidence);
-        //     label = label.substr(0, label.find(".") + 3); // 保留2位小数
+        //     label = label.substr(0, label.find(".") + 3); 
             
         //     // 在框上方绘制标签背景
         //     int baseline;
         //     cv::Size text_size = cv::getTextSize(label, cv::FONT_HERSHEY_SIMPLEX, 0.5, 1, &baseline);
-        //     int text_y = std::max(box_y - 5, text_size.height + 5); // 确保文本不超出图像顶部
+        //     int text_y = std::max(box_y - 5, text_size.height + 5); 
             
         //     cv::rectangle(bgr_mat, 
         //                   cv::Point(box_x, text_y - text_size.height - 5),
@@ -100,7 +103,7 @@ private:
         //     cv::putText(bgr_mat, label,
         //                 cv::Point(box_x, text_y - 5),
         //                 cv::FONT_HERSHEY_SIMPLEX, 0.5,
-        //                 cv::Scalar(0, 0, 0),  // 黑色文本
+        //                 cv::Scalar(0, 0, 0),  // Black text
         //                 1);
         // }
         
@@ -108,37 +111,30 @@ private:
         // cv::imshow("Obstacle Detection", bgr_mat);
         // cv::waitKey(1);
 
-        auto header = std_msgs::msg::Header();
-        header.stamp = this->now();
-        header.frame_id = "camera";
-        
-        publish_detection_results(header);
+        publish_detection_results();
 
-        ++frame_count_;
         auto now = std::chrono::steady_clock::now();
         auto duration = std::chrono::duration_cast<std::chrono::seconds>(now - last_time_).count();
         if (duration >= 1) {
-            RCLCPP_INFO(this->get_logger(), "Frame rate: %.2f fps",
-                  static_cast<float>(frame_count_) / duration);
-            frame_count_ = 0;
+            RCLCPP_INFO(this->get_logger(), "Frame rate: %.2f fps, last frame_id published: %lu",
+                  static_cast<float>(frame_count_) / duration, frame_count_); 
+            frame_count_ = 0; // 重置帧计数器用于下一个周期的FPS计算
             last_time_ = now;
         }
     }
 
-    void publish_detection_results(const std_msgs::msg::Header& header) {
+    void publish_detection_results() {
         auto targets_msg = ai_msgs::msg::PerceptionTargets();
         
-        // 设置消息头
-        targets_msg.header = header;
+        targets_msg.header.stamp = this->now();
+        targets_msg.header.frame_id = std::to_string(frame_count_); 
         
-        // 填充检测目标
         const auto& objects = detector_.get_detected_objects();
         for (const auto& obj : objects) {
             ai_msgs::msg::Target target;
             target.type = obj.class_name;
-            target.track_id = 0;
+            target.track_id = 0; 
             
-            // 创建ROI
             ai_msgs::msg::Roi roi;
             roi.type = "rect";
             roi.rect.x_offset = obj.x;
@@ -156,7 +152,7 @@ private:
     }
  
     rclcpp::Subscription<hbm_img_msgs::msg::HbmMsg1080P>::SharedPtr sub_;
-    size_t frame_count_;
+    size_t frame_count_; 
     std::chrono::steady_clock::time_point last_time_;
     RacingObstacleDetection& detector_; 
     rclcpp::Publisher<ai_msgs::msg::PerceptionTargets>::SharedPtr publisher_;
